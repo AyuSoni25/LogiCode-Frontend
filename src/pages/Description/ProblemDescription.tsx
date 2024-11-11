@@ -9,6 +9,7 @@ import DOMPurify from 'dompurify';
 
 import Languages from '../../constants/Languages';
 import Themes from '../../constants/Themes';
+import { socket } from '../../config/socket';
 
 type languageSupport = {
     languageName: string,
@@ -33,6 +34,7 @@ function Description({ descriptionText }: {descriptionText: string}) {
     const [language, setLanguage] = useState('javascript');
     const [code, setCode] = useState('');
     const [theme, setTheme] = useState('monokai');
+    const [submissionResponse, setSubmissionResponse] = useState('');
 
     async function handleSubmission() {
         try {
@@ -45,8 +47,29 @@ function Description({ descriptionText }: {descriptionText: string}) {
                 problemId: "66c6e3b823c93ffcdbf9f1ff"
             });
             console.log(response);
+            if(response.data.success){
+                setSubmissionResponse('SUBMISSION_SUCCESS');
+                setTimeout(()=>{
+                    setSubmissionResponse('');
+                }, 3000)
+                socket.on("submissionPayloadResponse", (data) => {
+                    const evaluation = JSON.parse(JSON.stringify(data));
+                    if(evaluation.response.status == 'SUCCESS'){
+                        setSubmissionResponse('EVALUATION_PASSED');
+                    } else {
+                        setSubmissionResponse('EVALUATION_FAILED');
+                    }
+                    setTimeout(()=>{
+                        setSubmissionResponse('');
+                    }, 3000)
+                });
+            }
             return response;
         } catch(error) {
+            setSubmissionResponse('SUBMISSION_FAILURE');
+            setTimeout(()=>{
+                setSubmissionResponse('');
+            }, 3000)
             console.log(error);
         }
     }
@@ -88,7 +111,31 @@ function Description({ descriptionText }: {descriptionText: string}) {
         }
     }
 
+    const getToastMessage = (status: string) => {
+        let message:string = '';
+        switch(status){
+            case 'SUBMISSION_SUCCESS': 
+                message = 'Submission created successfully. Your code is getting evaluated.';
+                break;
+            case 'SUBMISSION_FAILURE':
+                message = 'Error creating submission! Please try again.';
+                break;
+            case 'EVALUATION_PASSED':
+                message = 'Accepted.';
+                break;
+            case 'EVALUATION_FAILED':
+                message = 'Wrong Answer!';
+                break;
+        }
+        return message;
+    }
 
+    const getAlertTypeClass = (status:string) => {
+        if(status == 'SUBMISSION_SUCCESS' || status == 'EVALUATION_PASSED'){
+            return 'alert alert-success';
+        }
+        return 'alert alert-error';
+    }
 
     return (
         <div 
@@ -173,9 +220,23 @@ function Description({ descriptionText }: {descriptionText: string}) {
                         />
                     </div>
 
-                    { /* Collapsable test case part */ }
-
-                    <div className="collapse bg-base-200 rounded-none">
+                    { /* Collapsable test case part and toast messages*/ }
+                    {submissionResponse!= '' && <div role="alert" className={getAlertTypeClass(submissionResponse)}>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6 shrink-0 stroke-current"
+                        fill="none"
+                        viewBox="0 0 24 24">
+                        <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{getToastMessage(submissionResponse)}</span>
+                    </div>
+                    }  
+                    {submissionResponse == '' && <div className="collapse bg-base-200 rounded-none">
                         <input type="checkbox" className="peer" /> 
                         <div className="collapse-title bg-primary text-primary-content peer-checked:bg-secondary peer-checked:text-secondary-content">
                             Console
@@ -188,7 +249,7 @@ function Description({ descriptionText }: {descriptionText: string}) {
                             
                             {(testCaseTab === 'input') ? <textarea rows={4} cols={70} className='bg-neutral text-white rounded-md resize-none'/> : <div className='w-12 h-8'></div>}
                         </div>
-                    </div>
+                    </div>}
                 
                 </div>
 
